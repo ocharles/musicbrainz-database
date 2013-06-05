@@ -1,0 +1,25 @@
+name:                musicbrainz-database
+version:             0.1.0.0
+synopsis:            A single binary for setting up and administering MusicBrainz PostgreSQL databases.
+homepage:            http://musicbrainz.org
+license:             GPL-2
+license-file:        LICENSE
+author:              Oliver Charles
+maintainer:          ollie@ocharles.org.uk
+build-type:          Simple
+cabal-version:       >=1.8
+
+executable musicbrainz-database
+  main-is: Main.hs
+  build-depends:
+    base >=4.5 && < 5,
+    pipes >=3.3,
+    pipes-bytestring >=1.0,
+    pipes-parse >=1.0,
+    bytestring >=0.9,
+    text >=0.11,
+    postgresql-simple >=0.2,
+    postgresql-libpq >=0.8,
+    pipes-tar,
+    pipes-postgresql-simple
+  hs-source-dirs:      src
