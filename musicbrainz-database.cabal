@@ -18,6 +18,7 @@ executable musicbrainz-database
     pipes-parse >=1.0,
     bytestring >=0.9,
     text >=0.11,
+    optparse-applicative,
     postgresql-simple >=0.2,
     postgresql-libpq >=0.8,
     pipes-tar,

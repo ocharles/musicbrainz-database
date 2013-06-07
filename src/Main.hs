@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+import Control.Applicative
 import Control.Exception
 import Control.Monad (void, when)
 import Control.Proxy
@@ -11,6 +12,7 @@ import Control.Proxy.Trans.State
 import Data.ByteString (ByteString)
 import Data.Foldable (for_, forM_)
 import Data.List (stripPrefix)
+import Data.Monoid (mconcat)
 import Data.String (fromString)
 import System.IO
 
@@ -22,6 +24,7 @@ import qualified Database.PostgreSQL.Simple as Pg
 import qualified Database.PostgreSQL.Simple.Internal as Pg
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
+import qualified Options.Applicative as Optparse
 
 --------------------------------------------------------------------------------
 -- | Given a 'Pg.Connection', attempt to stream @mbdump/@ prefixed 'TarEntry's
@@ -45,34 +48,79 @@ data Options = Options { createUser :: Bool
                        , createForeignKeys :: Bool
                        , createConstraints :: Bool
                        , createExtensions :: Bool
-                       , importArchives :: [FilePath]
                        , createFunctions :: Bool
                        , setSequences :: Bool
+                       , vacuum :: Bool
+                       , importArchives :: [FilePath]
                        } deriving (Show)
 
 
 --------------------------------------------------------------------------------
 main :: IO ()
-main = execParser opts >>= run
+main = Optparse.execParser opts >>= run
 
-    where execParser = const $ return Options
-            { createUser = False
-            , createDb = True
-            , createSchemas = True
-            , createTables = True
-            , createIndexes = True
-            , createPrimaryKeys = True
-            , createForeignKeys = True
-            , createConstraints = True
-            , createExtensions = True
-            , createFunctions = True
-            , setSequences = True
-            --, importArchives = []
-            , importArchives = map ("/mnt/fedora-postgres/" ++)
-                [ "mbdump-cdstubs.tar", "mbdump-cover-art-archive.tar", "mbdump-derived.tar", "mbdump-documentation.tar", "mbdump-editor.tar", "mbdump-edit.tar", "mbdump-stats.tar", "mbdump.tar", "mbdump-wikidocs.tar" ]
-            }
-          opts = True
+opts = Optparse.info (Optparse.helper <*> (optionParser <|> everything) <*> mbdump) mempty
+  where
+    everything =
+        Options True True True True True True True True True True True True <$
+        Optparse.switch
+            (mconcat [ Optparse.long "bootstrap"
+                     , Optparse.help "Setup a fresh MusicBrainz database. This will create a database, database user, import all data, create indexes and integrity constraints, and complete by vacuuming the database."
+                     ])
 
+    mbdump = Optparse.arguments Just (mconcat
+        [ Optparse.metavar "mbdump"
+        , Optparse.help "MusicBrainz database dumps to import. Can be specified multiple times"
+        ])
+
+    optionParser = Options <$> Optparse.switch (mconcat
+                                 [ Optparse.long "create-user"
+                                 , Optparse.help "Create a musicbrainz database user"
+                                 ])
+                           <*> Optparse.switch (mconcat
+                                 [ Optparse.long "create-database"
+                                 , Optparse.help "Create the musicbrainz database"
+                                 ])
+                           <*> Optparse.switch (mconcat
+                                 [ Optparse.long "create-schemas"
+                                 , Optparse.help "Create the necessary musicbrainz schemas"
+                                 ])
+                           <*> Optparse.switch (mconcat
+                                 [ Optparse.long "create-tables"
+                                 , Optparse.help "Create the musicbrainz tables"
+                                 ])
+                           <*> Optparse.switch (mconcat
+                                 [ Optparse.long "create-indexes"
+                                 , Optparse.help "Create indexes"
+                                 ])
+                           <*> Optparse.switch (mconcat
+                                 [ Optparse.long "create-primary-keys"
+                                 , Optparse.help "Create primary keys"
+                                 ])
+                           <*> Optparse.switch (mconcat
+                                 [ Optparse.long "create-foreign-keys"
+                                 , Optparse.help "Create foreign keys"
+                                 ])
+                           <*> Optparse.switch (mconcat
+                                 [ Optparse.long "create-constraints"
+                                 , Optparse.help "Create per-talbe constraints"
+                                 ])
+                           <*> Optparse.switch (mconcat
+                                 [ Optparse.long "create-extensions"
+                                 , Optparse.help "Install PostgreSQL extensions"
+                                 ])
+                           <*> Optparse.switch (mconcat
+                                 [ Optparse.long "create-functions"
+                                 , Optparse.help "Create MusicBrainz database functions"
+                                 ])
+                           <*> Optparse.switch (mconcat
+                                 [ Optparse.long "set-sequences"
+                                 , Optparse.help "Reset all sequences"
+                                 ])
+                           <*> Optparse.switch (mconcat
+                                 [ Optparse.long "vacuum"
+                                 , Optparse.help "Perform VACUUM ANALYZE"
+                                 ])
 
 rootCon = Pg.defaultConnectInfo { Pg.connectUser = "root", Pg.connectDatabase = "template1" }
 mbUserCon = rootCon { Pg.connectUser = "musicbrainz" }
@@ -140,6 +188,9 @@ run opt = do
     when (setSequences opt) $ void $ do
         putStrLn "Resetting sequences"
         mapM_ (runPsql pg . (++ "/SetSequences.sql")) [ "sql", "sql/statistics" ]
+
+    when (vacuum opt) $ void $ do
+        Pg.execute_ pg "VACUUM ANALYZE"
 
 --------------------------------------------------------------------------------
 runPsql :: Pg.Connection -> FilePath -> IO ()
