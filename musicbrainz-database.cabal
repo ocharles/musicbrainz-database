@@ -22,5 +22,6 @@ executable musicbrainz-database
     postgresql-simple >=0.2,
     postgresql-libpq >=0.8,
     pipes-tar,
-    pipes-postgresql-simple
+    pipes-postgresql-simple,
+    pipes-safe
   hs-source-dirs:      src

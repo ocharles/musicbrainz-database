@@ -10,6 +10,12 @@ CREATE TRIGGER b_upd_area_alias BEFORE UPDATE ON area_alias
 CREATE TRIGGER unique_primary_for_locale BEFORE UPDATE OR INSERT ON area_alias
     FOR EACH ROW EXECUTE PROCEDURE unique_primary_area_alias();
 
+CREATE TRIGGER search_hint BEFORE UPDATE OR INSERT ON area_alias
+    FOR EACH ROW EXECUTE PROCEDURE simplify_search_hints(3);
+
+CREATE TRIGGER end_date_implies_ended BEFORE UPDATE OR INSERT ON area_alias
+    FOR EACH ROW EXECUTE PROCEDURE end_date_implies_ended();
+
 CREATE TRIGGER end_date_implies_ended BEFORE UPDATE OR INSERT ON area
     FOR EACH ROW EXECUTE PROCEDURE end_date_implies_ended();
 
@@ -20,9 +26,15 @@ CREATE TRIGGER b_upd_artist BEFORE UPDATE ON artist
     FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
 
 CREATE TRIGGER b_del_artist_special BEFORE DELETE ON artist
-    FOR EACH ROW EXECUTE PROCEDURE deny_special_purpose_artist_deletion();
+    FOR EACH ROW WHEN (OLD.id IN (1, 2)) EXECUTE PROCEDURE deny_special_purpose_deletion();
+
+CREATE TRIGGER end_area_implies_ended BEFORE UPDATE OR INSERT ON artist
+    FOR EACH ROW EXECUTE PROCEDURE end_area_implies_ended();
 
 CREATE TRIGGER end_date_implies_ended BEFORE UPDATE OR INSERT ON artist
+    FOR EACH ROW EXECUTE PROCEDURE end_date_implies_ended();
+
+CREATE TRIGGER end_date_implies_ended BEFORE UPDATE OR INSERT ON artist_alias
     FOR EACH ROW EXECUTE PROCEDURE end_date_implies_ended();
 
 CREATE TRIGGER b_upd_artist_alias BEFORE UPDATE ON artist_alias
@@ -61,6 +73,9 @@ CREATE TRIGGER b_upd_l_area_artist BEFORE UPDATE ON l_area_artist
 CREATE TRIGGER b_upd_l_area_label BEFORE UPDATE ON l_area_label
     FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
 
+CREATE TRIGGER b_upd_l_area_place BEFORE UPDATE ON l_area_place
+    FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
+
 CREATE TRIGGER b_upd_l_area_recording BEFORE UPDATE ON l_area_recording
     FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
 
@@ -82,6 +97,9 @@ CREATE TRIGGER b_upd_l_artist_artist BEFORE UPDATE ON l_artist_artist
 CREATE TRIGGER b_upd_l_artist_label BEFORE UPDATE ON l_artist_label
     FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
 
+CREATE TRIGGER b_upd_l_artist_place BEFORE UPDATE ON l_artist_place
+    FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
+
 CREATE TRIGGER b_upd_l_artist_recording BEFORE UPDATE ON l_artist_recording
     FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
 
@@ -100,6 +118,9 @@ CREATE TRIGGER b_upd_l_artist_work BEFORE UPDATE ON l_artist_work
 CREATE TRIGGER b_upd_l_label_label BEFORE UPDATE ON l_label_label
     FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
 
+CREATE TRIGGER b_upd_l_label_place BEFORE UPDATE ON l_label_place
+    FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
+
 CREATE TRIGGER b_upd_l_label_recording BEFORE UPDATE ON l_label_recording
     FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
 
@@ -113,6 +134,24 @@ CREATE TRIGGER b_upd_l_label_url BEFORE UPDATE ON l_label_url
     FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
 
 CREATE TRIGGER b_upd_l_label_work BEFORE UPDATE ON l_label_work
+    FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
+
+CREATE TRIGGER b_upd_l_place_place BEFORE UPDATE ON l_place_place
+    FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
+
+CREATE TRIGGER b_upd_l_place_recording BEFORE UPDATE ON l_place_recording
+    FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
+
+CREATE TRIGGER b_upd_l_place_release BEFORE UPDATE ON l_place_release
+    FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
+
+CREATE TRIGGER b_upd_l_place_release_group BEFORE UPDATE ON l_place_release_group
+    FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
+
+CREATE TRIGGER b_upd_l_place_url BEFORE UPDATE ON l_place_url
+    FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
+
+CREATE TRIGGER b_upd_l_place_work BEFORE UPDATE ON l_place_work
     FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
 
 CREATE TRIGGER b_upd_l_recording_recording BEFORE UPDATE ON l_recording_recording
@@ -164,12 +203,15 @@ CREATE TRIGGER a_ins_label AFTER INSERT ON label
     FOR EACH ROW EXECUTE PROCEDURE a_ins_label();
 
 CREATE TRIGGER b_del_label_special BEFORE DELETE ON label
-    FOR EACH ROW EXECUTE PROCEDURE deny_special_purpose_label_deletion();
+    FOR EACH ROW WHEN (OLD.id = 1) EXECUTE PROCEDURE deny_special_purpose_deletion();
 
 CREATE TRIGGER b_upd_label BEFORE UPDATE ON label
     FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
 
 CREATE TRIGGER end_date_implies_ended BEFORE UPDATE OR INSERT ON label
+    FOR EACH ROW EXECUTE PROCEDURE end_date_implies_ended();
+
+CREATE TRIGGER end_date_implies_ended BEFORE UPDATE OR INSERT ON label_alias
     FOR EACH ROW EXECUTE PROCEDURE end_date_implies_ended();
 
 CREATE TRIGGER b_upd_label_alias BEFORE UPDATE ON label_alias
@@ -187,6 +229,9 @@ CREATE TRIGGER b_upd_label_tag BEFORE UPDATE ON label_tag
 CREATE TRIGGER end_date_implies_ended BEFORE UPDATE OR INSERT ON link
     FOR EACH ROW EXECUTE PROCEDURE end_date_implies_ended();
 
+CREATE TRIGGER deny_deprecated BEFORE UPDATE OR INSERT ON link
+    FOR EACH ROW EXECUTE PROCEDURE deny_deprecated_links();
+
 CREATE TRIGGER b_upd_link_attribute BEFORE UPDATE OR INSERT ON link_attribute
     FOR EACH ROW EXECUTE PROCEDURE prevent_invalid_attributes();
 
@@ -203,6 +248,27 @@ CREATE TRIGGER b_upd_medium BEFORE UPDATE ON medium
     FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
 
 CREATE TRIGGER b_upd_medium_cdtoc BEFORE UPDATE ON medium_cdtoc
+    FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
+
+CREATE TRIGGER b_upd_place BEFORE UPDATE ON place
+    FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
+
+CREATE TRIGGER end_date_implies_ended BEFORE UPDATE OR INSERT ON place
+    FOR EACH ROW EXECUTE PROCEDURE end_date_implies_ended();
+
+CREATE TRIGGER end_date_implies_ended BEFORE UPDATE OR INSERT ON place_alias
+    FOR EACH ROW EXECUTE PROCEDURE end_date_implies_ended();
+
+CREATE TRIGGER b_upd_place_alias BEFORE UPDATE ON place_alias
+    FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
+
+CREATE TRIGGER unique_primary_for_locale BEFORE UPDATE OR INSERT ON place_alias
+    FOR EACH ROW EXECUTE PROCEDURE unique_primary_place_alias();
+
+CREATE TRIGGER search_hint BEFORE UPDATE OR INSERT ON place_alias
+    FOR EACH ROW EXECUTE PROCEDURE simplify_search_hints(2);
+
+CREATE TRIGGER b_upd_place_tag BEFORE UPDATE ON place_tag
     FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
 
 CREATE TRIGGER a_ins_recording AFTER INSERT ON recording
@@ -299,6 +365,9 @@ CREATE TRIGGER b_upd_work BEFORE UPDATE ON work
 CREATE TRIGGER b_upd_work_alias BEFORE UPDATE ON work_alias
     FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
 
+CREATE TRIGGER end_date_implies_ended BEFORE UPDATE OR INSERT ON work_alias
+    FOR EACH ROW EXECUTE PROCEDURE end_date_implies_ended();
+
 CREATE TRIGGER unique_primary_for_locale BEFORE UPDATE OR INSERT ON work_alias
     FOR EACH ROW EXECUTE PROCEDURE unique_primary_work_alias();
 
@@ -307,6 +376,9 @@ CREATE TRIGGER search_hint BEFORE UPDATE OR INSERT ON work_alias
 
 CREATE TRIGGER b_upd_work_tag BEFORE UPDATE ON work_tag
     FOR EACH ROW EXECUTE PROCEDURE b_upd_last_updated_table();
+
+CREATE TRIGGER inserting_edits_requires_confirmed_email_address BEFORE INSERT ON edit
+    FOR EACH ROW EXECUTE PROCEDURE inserting_edits_requires_confirmed_email_address();
 
 CREATE TRIGGER a_upd_edit AFTER UPDATE ON edit
     FOR EACH ROW EXECUTE PROCEDURE a_upd_edit();

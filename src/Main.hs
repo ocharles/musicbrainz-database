@@ -2,18 +2,16 @@
 import Control.Applicative
 import Control.Exception
 import Control.Monad (void, when)
-import Control.Proxy
-import Control.Proxy.ByteString (hGetS)
-import Control.Proxy.Parse (wrap)
-import Control.Proxy.PostgreSQL.Simple
-import Control.Proxy.Tar
-import Control.Proxy.Trans.Either
-import Control.Proxy.Trans.State
 import Data.ByteString (ByteString)
 import Data.Foldable (for_, forM_)
 import Data.List (stripPrefix)
-import Data.Monoid (mconcat)
+import Data.Monoid (mconcat, mempty)
 import Data.String (fromString)
+import Pipes
+import Pipes.ByteString (hGet)
+import Pipes.PostgreSQL.Simple.SafeT (Format(..), toTable)
+import Pipes.Safe (SafeT)
+import Pipes.Tar
 import System.IO
 
 import qualified Data.Text as Text
@@ -23,19 +21,21 @@ import Data.Text.Encoding
 import qualified Database.PostgreSQL.Simple as Pg
 import qualified Database.PostgreSQL.Simple.Internal as Pg
 import qualified Database.PostgreSQL.LibPQ as LibPQ
-
+import qualified Pipes.Prelude as P
 import qualified Options.Applicative as Optparse
 
 --------------------------------------------------------------------------------
 -- | Given a 'Pg.Connection', attempt to stream @mbdump/@ prefixed 'TarEntry's
 -- into the database using @COPY@.
-importTables :: Proxy p => Pg.Connection -> TarEntry ->
-    Consumer (TarP p) (Maybe ByteString) IO ()
-importTables c e =
-    for_ (stripPrefix "mbdump/" (entryPath e)) $ \tableName -> do
+importTables :: Pg.Connection -> TarHeader -> Consumer ByteString (SafeT IO) a
+importTables c e = do
+    case stripPrefix "mbdump/" (entryPath e) of
+      Just tableName -> do
         let t = if tableName == "editor_sanitised" then "editor" else tableName
-        lift (putStrLn $ "Importing " ++ t)
-        (wrap . tarEntry e >-> liftP . copyTextIn c t) ()
+        liftIO $ putStrLn ("Importing " ++ t)
+        toTable c Text t
+
+      Nothing -> for cat discard
 
 
 --------------------------------------------------------------------------------
@@ -51,6 +51,8 @@ data Options = Options { createUser :: Bool
                        , createFunctions :: Bool
                        , setSequences :: Bool
                        , vacuum :: Bool
+                       , createTriggers :: Bool
+                       , createViews :: Bool
                        , importArchives :: [FilePath]
                        } deriving (Show)
 
@@ -62,7 +64,7 @@ main = Optparse.execParser opts >>= run
 opts = Optparse.info (Optparse.helper <*> (optionParser <|> everything) <*> mbdump) mempty
   where
     everything =
-        Options True True True True True True True True True True True True <$
+        Options True True True True True True True True True True True True True True <$
         Optparse.switch
             (mconcat [ Optparse.long "bootstrap"
                      , Optparse.help "Setup a fresh MusicBrainz database. This will create a database, database user, import all data, create indexes and integrity constraints, and complete by vacuuming the database."
@@ -121,6 +123,14 @@ opts = Optparse.info (Optparse.helper <*> (optionParser <|> everything) <*> mbdu
                                  [ Optparse.long "vacuum"
                                  , Optparse.help "Perform VACUUM ANALYZE"
                                  ])
+                           <*> Optparse.switch (mconcat
+                                 [ Optparse.long "create-triggers"
+                                 , Optparse.help "Create triggers"
+                                 ])
+                           <*> Optparse.switch (mconcat
+                                 [ Optparse.long "create-views"
+                                 , Optparse.help "Create views"
+                                 ])
 
 rootCon = Pg.defaultConnectInfo { Pg.connectUser = "root", Pg.connectDatabase = "template1" }
 mbUserCon = rootCon { Pg.connectUser = "musicbrainz" }
@@ -165,8 +175,8 @@ run opt = do
     forM_ (importArchives opt) $ \f -> withFile f ReadMode $ \dump -> void $ do
         putStrLn $ "Importing " ++ f
         resetAll pg
-        runProxy $ runEitherK $ evalStateK mempty $
-            wrap . hGetS (32 * 1024 * 1024) dump >-> tarArchive />/ importTables pg
+        x <- iterTarArchive (importTables pg) $ parseTarEntries (hGet (32 * 1024 * 1024) dump)
+        print x
 
     when (createIndexes opt) $ void $ do
         putStrLn "Creating Indexes"
@@ -188,6 +198,14 @@ run opt = do
     when (setSequences opt) $ void $ do
         putStrLn "Resetting sequences"
         mapM_ (runPsql pg . (++ "/SetSequences.sql")) [ "sql", "sql/statistics" ]
+
+    when (createViews opt) $ void $ do
+        putStrLn "Creating views"
+        mapM_ (runPsql pg . (++ "/CreateViews.sql")) [ "sql", "sql/caa" ]
+
+    when (createTriggers opt) $ void $ do
+        putStrLn "Creating triggers"
+        mapM_ (runPsql pg . (++ "/CreateTriggers.sql")) [ "sql", "sql/caa" ]
 
     when (vacuum opt) $ void $ do
         Pg.execute_ pg "VACUUM ANALYZE"
